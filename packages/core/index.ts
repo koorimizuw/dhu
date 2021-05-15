@@ -1,10 +1,19 @@
 export * from "playwright-chromium";
-export { login, withBrowser, withPage, withLogin } from "./login";
+export {
+  login,
+  withBrowser,
+  withPage,
+  withLogin,
+  LoginContext,
+  Result,
+  LoginOptions,
+} from "./login";
 
 export {
   Attendance,
   AttendanceRecord,
   AttendanceRecordMark,
+  attendanceStatusMap,
   getAttendance,
 } from "./attendance";
 
@@ -18,7 +27,7 @@ export {
   configKeys,
 } from "./userInfo";
 
-export { getInfo } from "./info";
+export { getInfo, Info, GetInfoOptions } from "./info";
 export {
   getFS,
   fillFS,
@@ -31,8 +40,16 @@ export {
   FSQuestionSchema,
 } from "./fs";
 export { getGPA, GPA } from "./grade";
-export { saveGoogleCalendarCSV, getSchedule } from "./schedule";
-export { getTasks, Task, TaskMap } from "./task";
+export {
+  saveGoogleCalendarCSV,
+  getSchedule,
+  timeMap,
+  TimeMap,
+  Time,
+  Lecture,
+  CalendarEvent,
+} from "./schedule";
+export { getTasks, Task, TaskMap, Attachment } from "./task";
 export { getMaterials, Material, MaterialMap } from "./materials";
 export {
   getOpenSyllabus,
