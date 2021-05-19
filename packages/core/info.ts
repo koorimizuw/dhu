@@ -1,15 +1,17 @@
 import { Page } from "playwright-chromium";
 import {
+  Attachment,
   sleep,
   waitForClickNavigation,
   handleDownloadTable,
-  Attachment,
+  HandleAttachmentOptions,
 } from "./utils";
 import {
   NAV_INFO,
   NAV_INFO_LINK,
   INFO_GENERAL_ALL,
   INFO_GENERAL_ITEM,
+  INFO_GENERAL_ITEM_STATE,
   INFO_CLASS_ALL,
   INFO_ITEM_CLOSE,
   INFO_ALL,
@@ -27,16 +29,16 @@ export interface Info {
   attachments?: Attachment[];
 }
 
-export interface GetInfoOptions {
-  all?: boolean;
+export type GetInfoOptions = {
+  listAll?: boolean;
+  skipRead?: boolean;
   content?: boolean;
-  attachments?: boolean;
-  dir: string;
-}
+  attachments?: HandleAttachmentOptions;
+};
 
-export interface GetInfoItemOptions extends GetInfoOptions {
+export type GetInfoItemOptions = GetInfoOptions & {
   navigate?: boolean;
-}
+};
 
 export async function navigateToInfo(page: Page) {
   await page.click(NAV_INFO);
@@ -65,9 +67,11 @@ export async function getInfo(
   { page }: LoginContext,
   options: GetInfoOptions
 ): Promise<Info[]> {
+  options.skipRead ??= true;
+
   await navigateToInfo(page);
 
-  if (options.all) {
+  if (options.listAll) {
     await openAll(page);
   }
 
@@ -75,12 +79,19 @@ export async function getInfo(
   const len = infoGeneralItemLinks.length;
   let count = 0;
   const infoList: Info[] = [];
-
   while (count !== len) {
+    if (options.skipRead) {
+      const states = await page.$$(INFO_GENERAL_ITEM_STATE);
+      const state = await states[count].textContent();
+      if (state?.trim() === "未読にする") {
+        count += 1;
+        continue;
+      }
+    }
     const info = await getInfoItemByIndex(page, count, {
       ...options,
       // skip open here
-      all: false,
+      listAll: false,
       // skip navigation here
       navigate: false,
     });
@@ -102,7 +113,7 @@ export async function getInfoItemByIndex(
     await navigateToInfo(page);
   }
 
-  if (options.all) {
+  if (options.listAll) {
     await openAll(page);
   }
 
@@ -122,9 +133,9 @@ export async function getInfoItemByIndex(
     const [sender, category, title, content, availableTime] = await page.$$eval(
       "tr > .ui-panelgrid-cell:nth-child(2)",
       (els) => {
-        const textContentOf = (e?: Element | null) =>
-          e?.textContent?.trim() ?? "";
-        return els.map(textContentOf);
+        const innerTextOf = (e?: Element | null) =>
+          (e as HTMLElement)?.innerText?.trim() ?? "";
+        return els.map(innerTextOf);
       }
     );
     ret = { ...ret, sender, category, title, content, availableTime };
@@ -137,7 +148,7 @@ export async function getInfoItemByIndex(
     let attachments: Attachment[] = [];
     if (hasAttachments) {
       await page.click(`#bsd00702\\:ch\\:j_idt502`);
-      attachments = await handleDownloadTable(page, options);
+      attachments = await handleDownloadTable(page, options.attachments);
     }
     ret = { ...ret, attachments };
   }

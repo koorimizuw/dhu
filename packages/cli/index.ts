@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { promises as fs } from "fs";
 import cac from "cac";
 import path from "path";
 import chalk from "chalk";
@@ -16,6 +17,7 @@ import {
   configKeys,
   getUserConfig,
   updateUserConfig,
+  GetInfoOptions,
 } from "@dhu/core";
 import {
   renderLogo,
@@ -24,7 +26,7 @@ import {
   renderGPA,
   renderTaskMap,
   renderMaterialMap,
-  fs,
+  renderFS,
 } from "./view";
 import pkg from "@dhu/cli/package.json";
 
@@ -65,16 +67,20 @@ cli
   .command("info", "Get info")
   .option("--all", "retrieve all info")
   .option("--head", "launch headfully")
+  .option("-r,--includeRead", "include read info")
   .option("-c,--content", "get content info")
-  .option("-a,--attachments", "download attachments")
+  .option("-d,--download", "download attachments")
   .option("--dir <dir>", "path to save download attachments")
   .action(async (option) => {
-    const { all, attachments, content, dir } = option;
-    const getInfoOptions = {
-      all: Boolean(all),
+    const { all, download, includeRead, content, dir } = option;
+    const getInfoOptions: GetInfoOptions = {
+      listAll: Boolean(all),
+      skipRead: !includeRead,
       content: Boolean(content),
-      attachments: Boolean(attachments),
-      dir: dir ?? process.cwd(),
+      attachments: {
+        download: Boolean(download),
+        dir: dir ?? process.cwd(),
+      },
     };
     const data = await withLogin(
       async (page) => getInfo(page, getInfoOptions),
@@ -82,14 +88,16 @@ cli
         headless: !option.head,
       }
     );
-    await match(data);
+    await match(data, {
+      ok: (data) => console.log(JSON.stringify(data, null, 4)),
+    });
   });
 
 cli
   .command("fs", "Get fs")
   .option("--head", "launch headfully")
   .action(async (option) => {
-    await withLogin(fs.write, { headless: !option.head });
+    await withLogin(renderFS.write, { headless: !option.head });
   });
 
 cli
@@ -184,7 +192,14 @@ cli
   .option("-s, --start <start>", "first monday when quarter start")
   .action(async (option) => {
     await withLogin(
-      (ctx) => saveGoogleCalendarCSV(ctx, option.q, option.start),
+      async (ctx) => {
+        const csv = await saveGoogleCalendarCSV(ctx, option.q, option.start);
+        await fs.writeFile(
+          `${process.cwd()}/dhu-timetable-${option.start}.csv`,
+          csv,
+          { encoding: "utf-8" }
+        );
+      },
       {
         headless: !option.head,
       }

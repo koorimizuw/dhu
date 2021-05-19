@@ -11,6 +11,7 @@ import {
   waitForNavigation,
   Attachment,
   handleDownloadTable,
+  HandleAttachmentOptions,
 } from "./utils";
 
 export interface Material {
@@ -64,8 +65,8 @@ async function collectClassMaterials(
   for (const _ of materialsRows) {
     const rows = await page.$$("#funcForm\\:jgdocList_data > tr");
     let material = await rows[i].$$eval("td", (tds) => {
-      const textContentOf = (e?: Element | null) =>
-        e?.textContent?.trim() ?? "";
+      const innerTextOf = (e?: Element | null) =>
+        (e as HTMLElement)?.innerText?.trim() ?? "";
 
       const [
         group,
@@ -77,7 +78,7 @@ async function collectClassMaterials(
         publicTime,
         finishTime,
         sender,
-      ] = tds.map(textContentOf);
+      ] = tds.map(innerTextOf);
 
       return {
         group,
@@ -109,11 +110,10 @@ async function collectClassMaterials(
             });
           });
 
-          const details = await collectClassMaterialsDetails(
-            page,
-            classIndex,
-            classDir
-          );
+          const details = await collectClassMaterialsDetails(page, classIndex, {
+            download: true,
+            dir: classDir,
+          });
           material = { ...material, ...details };
         }
         await fs.writeFile(mdPath, materialToMarkdown(material), {
@@ -130,21 +130,22 @@ async function collectClassMaterials(
 async function collectClassMaterialsDetails(
   page: Page,
   classIndex: number,
-  dir: string
+  options: HandleAttachmentOptions
 ): Promise<Pick<Material, "content" | "attachments">> {
   const content = await page.$eval(".contentsArea", (e) => {
-    const textContentOf = (e?: Element | null) => e?.textContent?.trim() ?? "";
-    return textContentOf(e);
+    const innerTextOf = (e?: Element | null) =>
+      (e as HTMLElement)?.innerText?.trim() ?? "";
+    return innerTextOf(e);
   });
 
   const hasAttachments = await page.evaluate(
     () => document.querySelector("#funcForm\\:j_idt368") !== null
   );
-  const attachments: Attachment[] = [];
+  let attachments: Attachment[] = [];
 
   if (hasAttachments) {
     await page.click("#funcForm\\:j_idt368");
-    attachments.push(...(await handleDownloadTable(page, { dir })));
+    attachments = await handleDownloadTable(page, options);
   }
 
   // go back
