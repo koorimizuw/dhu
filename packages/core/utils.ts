@@ -1,5 +1,6 @@
 import path from "path";
 import { Page } from "playwright-chromium";
+import { Stream } from "stream"
 import { Result } from "./login";
 import { INFO_ITEM_ATTACHMENT_CLOSE } from "./selectors";
 
@@ -8,7 +9,7 @@ export type ThirdPartyAny = any;
 
 export const theWorld = () => {
   // eslint-disable-next-line @typescript-eslint/no-empty-function
-  return new Promise(() => {});
+  return new Promise(() => { });
 };
 
 export const sleep = (timeout: number) => {
@@ -91,14 +92,35 @@ export interface Attachment {
   title: string;
   filename?: string;
   url?: string;
+  buffer?: Buffer;
+
 }
 
 export type HandleAttachmentOptions =
   | {
-      dir: string;
-      download: true;
-    }
+    dir: string;
+    download: true;
+    buffer?: boolean;
+  }
   | { download?: false };
+
+export async function getBufferFromStream(
+  stream: Stream | null
+): Promise<Buffer> {
+  if (!stream) {
+    throw 'FILE_STREAM_EMPTY';
+  }
+  return new Promise(
+    (r, j) => {
+      let buffer = Buffer.from([]);
+      stream.on('data', buf => {
+        buffer = Buffer.concat([buffer, buf]);
+      });
+      stream.on('end', () => r(buffer));
+      stream.on('error', j);
+    }
+  );
+}
 
 export async function handleDownloadTable(
   page: Page,
@@ -116,6 +138,7 @@ export async function handleDownloadTable(
       return textContentOf(e);
     });
     let url: string | null = null;
+    let buffer: Buffer | null = null;
 
     // if (attachmentTitle in seen) {
     // TODO
@@ -134,7 +157,18 @@ export async function handleDownloadTable(
     ]);
     const suggestedFilename = download.suggestedFilename();
     const downloadPath = path.join(options.dir, suggestedFilename);
-    await download.saveAs(downloadPath);
+
+    let attachment: Attachment = { title }
+
+    if (options.buffer) {
+      const stream = await download.createReadStream()
+      if (stream) {
+        const buffer = await getBufferFromStream(stream)
+        attachment = { ...attachment, buffer }
+      }
+    } else {
+      await download.saveAs(downloadPath);
+    }
 
     const failure = await download.failure();
     if (failure) {
@@ -142,7 +176,7 @@ export async function handleDownloadTable(
     }
     // all urls are same, doesn't really make sense to store them.
     url = download.url();
-    attachments.push({ title, url, filename: suggestedFilename });
+    attachments.push({ ...attachment, title, url, filename: suggestedFilename });
   }
   await page.click(INFO_ITEM_ATTACHMENT_CLOSE);
 
