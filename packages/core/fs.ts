@@ -1,5 +1,6 @@
 import { Page } from "playwright-chromium";
-import { sleep, ThirdPartyAny, navigate } from "./utils";
+import { sleep, Head, Tail } from "./utils";
+import { navigate } from "./navigate";
 import { LoginContext, Result } from "./login";
 
 export type FS = {
@@ -85,14 +86,6 @@ export type FSQuestionSchema = { text: string } & (
 );
 export type FSQuestion = FSForm[number];
 
-type Head<T extends readonly unknown[]> = T extends [] ? never : T[0];
-type Tail<T extends readonly unknown[]> = T extends readonly [
-  head: unknown,
-  ...tail: infer Rest
-]
-  ? Rest
-  : never;
-
 export type FSAnswer<T> = T extends FSQuestion
   ? T extends {
       type: "select";
@@ -106,9 +99,6 @@ type FSAnswersFrom<T extends readonly unknown[]> = Head<Tail<T>> extends never
   : [FSAnswer<Head<T>>, ...FSAnswersFrom<Tail<T>>];
 
 export type FSFormAnswers = FSAnswersFrom<FSForm>;
-
-declare const PrimeFaces: ThirdPartyAny;
-declare const processSave: ThirdPartyAny;
 
 export async function fillFS(
   page: Page,
@@ -146,25 +136,12 @@ export async function fillFS(
 
     // log(`--- try confirm`);
     await page.click(`.btnAnswer`);
-    await page.evaluate(() => {
-      PrimeFaces.ab({
-        s: "funcForm:j_idt244:j_idt245",
-        p: "funcForm:j_idt244:j_idt245",
-        u: "@(.enqArea)",
-      });
-    });
+    const confirms = await page.$$(
+      `.ui-helper-clearfix > button[type="submit"]`
+    );
+    confirms[0].click();
     await sleep(1000);
-    await page.evaluate(() => {
-      PrimeFaces.ab({
-        s: "funcForm:j_idt249:j_idt250",
-        p: "funcForm:j_idt249:j_idt250",
-        u: "@all",
-        // @ts-ignore
-        onco: function (xhr, status, args) {
-          processSave(xhr, status, args);
-        },
-      });
-    });
+    confirms[1].click();
     await sleep(1000);
     await page.waitForSelector(".msgArea");
     // log(`✅ ok fill ${title}!`);

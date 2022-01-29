@@ -15,9 +15,11 @@ import {
   saveGoogleCalendarCSV,
   withLogin,
   configKeys,
-  getUserConfig,
+  getUserData,
+  zoom,
   updateUserConfig,
   GetInfoOptions,
+  syncAll,
 } from "@dhu/core";
 import {
   renderLogo,
@@ -27,8 +29,9 @@ import {
   renderTaskMap,
   renderMaterialMap,
   renderFS,
+  renderZoom,
 } from "./view";
-import pkg from "@dhu/cli/package.json";
+import pkg from "./package.json";
 
 const cli = cac();
 
@@ -77,7 +80,7 @@ cli
       listAll: Boolean(all),
       skipRead: !includeRead,
       content: Boolean(content),
-      attachments: {
+      attachmentOptions: {
         download: Boolean(download),
         dir: dir ?? process.cwd(),
       },
@@ -126,23 +129,34 @@ cli
   .action(async (option) => {
     const getDir = async () => {
       if (option.dir) return option.dir;
-      const config = await getUserConfig();
-      if (config?.syncDir) return config.syncDir;
+      const data = await getUserData();
+      if (data?.config?.syncDir) return data.config.syncDir;
       return path.join(process.cwd(), ".dhu-sync");
     };
 
     const dir = await getDir();
     console.log(chalk`syncing data with {cyan ${dir}}`);
 
-    const result = await withLogin((ctx) => getMaterials(ctx, { dir }), {
-      headless: !option.head,
-    });
+    const result = await withLogin(
+      (ctx) => getMaterials(ctx, { download: true, dir }),
+      {
+        headless: !option.head,
+      }
+    );
 
     await match(result, {
       ok(data) {
         renderMaterialMap(data);
       },
     });
+  });
+
+cli
+  .command("sync", "Sync all")
+  .option("--head", "launch headfully")
+  .option("--dir <dir>", "path to save download attachments")
+  .action(async (option) => {
+    await syncAll(option.dir, { headless: !option.head });
   });
 
 cli
@@ -166,9 +180,8 @@ cli
     }
 
     if (option.show) {
-      const config = await getUserConfig();
-      // @ts-ignore
-      console.log(config?.[k]);
+      const data = await getUserData();
+      console.log(data?.config?.[k as keyof typeof data["config"]]);
       return;
     }
 
@@ -207,6 +220,22 @@ cli
     console.log("✨done");
   });
 
+cli
+  .command("zoom", "Open zoom")
+  .option("--import-url", "Import zoom info by url from web")
+  .option("--import-file", "Import zoom info by local file")
+  .action(async (option) => {
+    if (option.importUrl) {
+      return zoom.importFromUrl(option.importUrl);
+    }
+
+    if (option.importFile) {
+      return zoom.importFromFile(option.importFile);
+    }
+
+    await renderZoom();
+  });
+
 cli.help();
 cli.version(pkg.version);
 
@@ -215,7 +244,7 @@ async function checkVersion() {
   if (ver === pkg.version) return;
   console.log(
     chalk.yellow
-      .bold`A new version of ${pkg.name} {cyan.bold ${ver}} (currently ${pkg.version}) has been released, try run {cyan.bold \`yarn global add @dhu/cli\`} to upgrade.`
+      .bold`A new version of ${pkg.name} {cyan.bold ${ver}} (currently ${pkg.version}) has been released, try run {cyan.bold \`pnpm add @dhu/cli --global\`} to upgrade.`
   );
 }
 

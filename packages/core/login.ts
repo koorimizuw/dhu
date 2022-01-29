@@ -11,8 +11,8 @@ import {
   LOGIN_SUBMIT_BUTTON,
   URL_TOP,
 } from "./selectors";
-import { getUserInfo, LoginInfo, removeUserInfo } from "./userInfo";
-import { waitForClickNavigation, waitForNavigation } from "./utils";
+import { getUserData, LoginInfo, removeUserInfo } from "./userData";
+import { navigate } from "./navigate";
 
 export type LoginContext = {
   ctx: BrowserContext;
@@ -37,7 +37,7 @@ export async function login(
   const ctx = await browser.newContext({ acceptDownloads: true });
   const page = await ctx.newPage();
   try {
-    await waitForNavigation(page, () => page.goto(URL_TOP));
+    await navigate(page).byGoto(URL_TOP);
 
     const maintenanceMessage = await page.evaluate(() => {
       const e = document.querySelector("#funcContent > div > p");
@@ -52,7 +52,7 @@ export async function login(
 
     await page.type(LOGIN_ID, id);
     await page.type(LOGIN_PASSWORD, password);
-    await waitForClickNavigation(page, LOGIN_SUBMIT_BUTTON);
+    await navigate(page).byClick(LOGIN_SUBMIT_BUTTON);
 
     const loginErrorMessage = await page.evaluate(() => {
       const e = document.querySelector(".ui-messages-error-detail");
@@ -67,7 +67,8 @@ export async function login(
       }
       throw new Error(loginErrorMessage);
     }
-  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
     await ctx.close();
 
     return { error };
@@ -83,12 +84,13 @@ export async function withLogin<T>(
   fn: (ctx: LoginContext) => Promise<T>,
   option?: LaunchOptions
 ): Promise<Result<T>> {
-  const info = await getUserInfo().catch(console.error);
-  if (!info) {
+  const info = await getUserData();
+  const userInfo = info?.user;
+  if (!userInfo) {
     return { error: "please provide login info, try `dhu login`" };
   }
   return withBrowser(async (browser) => {
-    const { error, data: loginContext } = await login(browser, info, {
+    const { error, data: loginContext } = await login(browser, userInfo, {
       removeUserInfoOnError: true,
     });
     if (error) {
@@ -110,7 +112,8 @@ export async function withBrowser<T>(
   try {
     const data = await fn(browser);
     result = { data };
-  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
     result = { error };
   }
   await browser.close();
